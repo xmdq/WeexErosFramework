@@ -31,9 +31,12 @@ import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.text.TextUtils;
+import android.util.Log;
 import android.widget.ImageView;
 import android.widget.ImageView.ScaleType;
+
 import com.benmu.framework.extend.hook.ui.view.HookWXImageView;
+import com.bumptech.glide.Glide;
 import com.taobao.weex.WXEnvironment;
 import com.taobao.weex.WXSDKInstance;
 import com.taobao.weex.adapter.IWXImgLoaderAdapter;
@@ -60,6 +63,7 @@ import com.taobao.weex.utils.WXDomUtils;
 import com.taobao.weex.utils.WXLogUtils;
 import com.taobao.weex.utils.WXUtils;
 import com.taobao.weex.utils.WXViewUtils;
+
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -79,28 +83,33 @@ public class HookImage extends WXComponent<ImageView> {
     private String mSrc;
     private int mBlurRadius;
     private boolean mAutoRecycle = true;
+    public static final String AUTORECYCLE_URL = "auto-recycle-url";
 
-    private static SingleFunctionParser.FlatMapper<Integer> BLUR_RADIUS_MAPPER = new SingleFunctionParser.FlatMapper<Integer>() {
-        @Override
-        public Integer map(String raw) {
-            return WXUtils.getInteger(raw,0);
-        }
-    };
+    private static SingleFunctionParser.FlatMapper<Integer> BLUR_RADIUS_MAPPER = new
+            SingleFunctionParser.FlatMapper<Integer>() {
+                @Override
+                public Integer map(String raw) {
+                    return WXUtils.getInteger(raw, 0);
+                }
+            };
 
     public static class Ceator implements ComponentCreator {
-        public WXComponent createInstance(WXSDKInstance instance, WXDomObject node, WXVContainer parent) throws IllegalAccessException, InvocationTargetException, InstantiationException {
-            return new HookImage(instance,node,parent);
+        public WXComponent createInstance(WXSDKInstance instance, WXDomObject node, WXVContainer
+                parent) throws IllegalAccessException, InvocationTargetException,
+                InstantiationException {
+            return new HookImage(instance, node, parent);
         }
     }
 
 
     @Deprecated
-    public HookImage(WXSDKInstance instance, WXDomObject dom, WXVContainer parent, String instanceId, boolean isLazy) {
-        this(instance,dom,parent);
+    public HookImage(WXSDKInstance instance, WXDomObject dom, WXVContainer parent, String
+            instanceId, boolean isLazy) {
+        this(instance, dom, parent);
     }
 
     public HookImage(WXSDKInstance instance, WXDomObject node,
-                   WXVContainer parent) {
+                     WXVContainer parent) {
         super(instance, node, parent);
     }
 
@@ -140,11 +149,11 @@ public class HookImage extends WXComponent<ImageView> {
                 return true;
             case Constants.Name.FILTER:
                 int blurRadius = 0;
-                if(param != null && param instanceof String) {
-                    blurRadius = parseBlurRadius((String)param);
+                if (param != null && param instanceof String) {
+                    blurRadius = parseBlurRadius((String) param);
                 }
-                if(!TextUtils.isEmpty(this.mSrc)) {
-                    setBlurRadius(this.mSrc,blurRadius);
+                if (!TextUtils.isEmpty(this.mSrc)) {
+                    setBlurRadius(this.mSrc, blurRadius);
                 }
                 return true;
         }
@@ -191,7 +200,6 @@ public class HookImage extends WXComponent<ImageView> {
 
     /**
      * Process local scheme, load drawable.
-     * @param rewrited
      */
     private void setLocalSrc(Uri rewrited) {
         ImageView imageView;
@@ -208,13 +216,13 @@ public class HookImage extends WXComponent<ImageView> {
         }
 
         ImageView image = getHostView();
-        if("".equals(src) && image != null){
+        if ("".equals(src) && image != null) {
             image.setImageDrawable(null);
             return;
         }
 
-        if(image != null){
-            if(image.getDrawable() != null){
+        if (image != null) {
+            if (image.getDrawable() != null) {
                 image.setImageDrawable(null);
             }
         }
@@ -228,7 +236,7 @@ public class HookImage extends WXComponent<ImageView> {
             setLocalSrc(rewrited);
         } else {
             int blur = 0;
-            if(getDomObject() != null) {
+            if (getDomObject() != null) {
                 String blurStr = getDomObject().getStyles().getBlur();
                 blur = parseBlurRadius(blurStr);
             }
@@ -237,26 +245,27 @@ public class HookImage extends WXComponent<ImageView> {
     }
 
     private void setBlurRadius(@NonNull String src, int blurRadius) {
-        if(getInstance() != null && blurRadius != mBlurRadius) {
+        if (getInstance() != null && blurRadius != mBlurRadius) {
             Uri parsedUri = getInstance().rewriteUri(Uri.parse(src), URIAdapter.IMAGE);
-            if(!Constants.Scheme.LOCAL.equals(parsedUri.getScheme())) {
-                setRemoteSrc(parsedUri,blurRadius);
+            if (!Constants.Scheme.LOCAL.equals(parsedUri.getScheme())) {
+                setRemoteSrc(parsedUri, blurRadius);
             }
         }
     }
 
     private int parseBlurRadius(@Nullable String rawRadius) {
-        if(rawRadius == null) {
+        if (rawRadius == null) {
             return 0;
         }
-        SingleFunctionParser<Integer> parser = new SingleFunctionParser<Integer>(rawRadius,BLUR_RADIUS_MAPPER);
+        SingleFunctionParser<Integer> parser = new SingleFunctionParser<Integer>(rawRadius,
+                BLUR_RADIUS_MAPPER);
         List<Integer> list = null;
         try {
             list = parser.parse("blur");
-        }catch (Exception e) {
+        } catch (Exception e) {
             return 0;
         }
-        if(list == null || list.isEmpty()) {
+        if (list == null || list.isEmpty()) {
             return 0;
         }
         return list.get(0);
@@ -265,9 +274,9 @@ public class HookImage extends WXComponent<ImageView> {
     @Override
     public void recycled() {
         super.recycled();
-
+        Glide.with(getHostView().getContext()).clear(getHostView());
         if (getInstance().getImgLoaderAdapter() != null) {
-            getInstance().getImgLoaderAdapter().setImage(null, getHostView(),
+            getInstance().getImgLoaderAdapter().setImage(AUTORECYCLE_URL, getHostView(),
                     null, null);
         } else {
             if (WXEnvironment.isApkDebugable()) {
@@ -277,23 +286,24 @@ public class HookImage extends WXComponent<ImageView> {
         }
     }
 
-    public void autoReleaseImage(){
-        if(mAutoRecycle){
-            if(getHostView() != null){
+    public void autoReleaseImage() {
+        if (mAutoRecycle) {
+            if (getHostView() != null) {
                 if (getInstance().getImgLoaderAdapter() != null) {
-                    getInstance().getImgLoaderAdapter().setImage(null, getHostView(), null, null);
+                    getInstance().getImgLoaderAdapter().setImage(AUTORECYCLE_URL, getHostView(),
+                            null, null);
                 }
             }
         }
     }
 
     public void autoRecoverImage() {
-        if(mAutoRecycle) {
+        if (mAutoRecycle) {
             setSrc(mSrc);
         }
     }
 
-    private void setRemoteSrc(Uri rewrited,int blurRadius) {
+    private void setRemoteSrc(Uri rewrited, int blurRadius) {
 
         WXImageStrategy imageStrategy = new WXImageStrategy();
         imageStrategy.isClipping = true;
@@ -307,7 +317,8 @@ public class HookImage extends WXComponent<ImageView> {
         imageStrategy.setImageListener(new WXImageStrategy.ImageListener() {
             @Override
             public void onImageFinish(String url, ImageView imageView, boolean result, Map extra) {
-                if (getDomObject() != null && getDomObject().getEvents().contains(Constants.Event.ONLOAD)) {
+                if (getDomObject() != null && getDomObject().getEvents().contains(Constants.Event
+                        .ONLOAD)) {
                     Map<String, Object> params = new HashMap<String, Object>();
                     Map<String, Object> size = new HashMap<>(2);
                     if (imageView != null && imageView instanceof Measurable) {
@@ -327,14 +338,15 @@ public class HookImage extends WXComponent<ImageView> {
             }
         });
 
-        String placeholder=null;
-        if(getDomObject().getAttrs().containsKey(Constants.Name.PLACEHOLDER)){
-            placeholder= (String) getDomObject().getAttrs().get(Constants.Name.PLACEHOLDER);
-        }else if(getDomObject().getAttrs().containsKey(Constants.Name.PLACE_HOLDER)){
-            placeholder=(String)getDomObject().getAttrs().get(Constants.Name.PLACE_HOLDER);
+        String placeholder = null;
+        if (getDomObject().getAttrs().containsKey(Constants.Name.PLACEHOLDER)) {
+            placeholder = (String) getDomObject().getAttrs().get(Constants.Name.PLACEHOLDER);
+        } else if (getDomObject().getAttrs().containsKey(Constants.Name.PLACE_HOLDER)) {
+            placeholder = (String) getDomObject().getAttrs().get(Constants.Name.PLACE_HOLDER);
         }
-        if(!TextUtils.isEmpty(placeholder)){
-            imageStrategy.placeHolder = getInstance().rewriteUri(Uri.parse(placeholder),URIAdapter.IMAGE).toString();
+        if (!TextUtils.isEmpty(placeholder)) {
+            imageStrategy.placeHolder = getInstance().rewriteUri(Uri.parse(placeholder),
+                    URIAdapter.IMAGE).toString();
         }
 
         IWXImgLoaderAdapter imgLoaderAdapter = getInstance().getImgLoaderAdapter();
@@ -355,7 +367,8 @@ public class HookImage extends WXComponent<ImageView> {
             BorderDrawable borderDrawable = WXViewUtils.getBorderDrawable(getHostView());
             float[] borderRadius;
             if (borderDrawable != null) {
-                RectF borderBox = new RectF(0, 0, WXDomUtils.getContentWidth(imageDom), WXDomUtils.getContentHeight(imageDom));
+                RectF borderBox = new RectF(0, 0, WXDomUtils.getContentWidth(imageDom),
+                        WXDomUtils.getContentHeight(imageDom));
                 borderRadius = borderDrawable.getBorderRadius(borderBox);
             } else {
                 borderRadius = new float[]{0, 0, 0, 0, 0, 0, 0, 0};
@@ -373,24 +386,51 @@ public class HookImage extends WXComponent<ImageView> {
         }
     }
 
+
+    @Override
+    protected void onFinishLayout() {
+        super.onFinishLayout();
+        //校对borderRadius
+        collateBorderRadius();
+    }
+
+
+    private void collateBorderRadius() {
+        if (getHostView() instanceof HookWXImageView) {
+            HookWXImageView hookWXImageView = (HookWXImageView) getHostView();
+            BorderDrawable borderDrawable = WXViewUtils.getBorderDrawable(hookWXImageView);
+            if (borderDrawable != null) {
+                ImmutableDomObject imageDom = getDomObject();
+                RectF borderBox = new RectF(0, 0, WXDomUtils.getContentWidth(imageDom),
+                        WXDomUtils.getContentHeight(imageDom));
+                float[] borderRadius = borderDrawable.getBorderRadius(borderBox);
+                hookWXImageView.collateBorderRadius(borderRadius);
+            }
+        }
+    }
+
     /**
      * Need permission {android.permission.WRITE_EXTERNAL_STORAGE}
      */
     @JSMethod(uiThread = false)
     public void save(final JSCallback saveStatuCallback) {
 
-        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission
+                .WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             if (getContext() instanceof Activity) {
                 ActivityCompat.requestPermissions((Activity) getContext(),
-                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, WRITE_EXTERNAL_STORAGE_PERMISSION_REQUEST_CODE);
+                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                        WRITE_EXTERNAL_STORAGE_PERMISSION_REQUEST_CODE);
             }
         }
 
-        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission
+                .WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             if (saveStatuCallback != null) {
                 Map<String, Object> result = new HashMap<>();
                 result.put(SUCCEED, false);
-                result.put(ERRORDESC,"Permission denied: android.permission.WRITE_EXTERNAL_STORAGE");
+                result.put(ERRORDESC, "Permission denied: android.permission" +
+                        ".WRITE_EXTERNAL_STORAGE");
                 saveStatuCallback.invoke(result);
             }
             return;
@@ -400,7 +440,7 @@ public class HookImage extends WXComponent<ImageView> {
             if (saveStatuCallback != null) {
                 Map<String, Object> result = new HashMap<>();
                 result.put(SUCCEED, false);
-                result.put(ERRORDESC,"Image component not initialized");
+                result.put(ERRORDESC, "Image component not initialized");
                 saveStatuCallback.invoke(result);
             }
             return;
@@ -410,13 +450,14 @@ public class HookImage extends WXComponent<ImageView> {
             if (saveStatuCallback != null) {
                 Map<String, Object> result = new HashMap<>();
                 result.put(SUCCEED, false);
-                result.put(ERRORDESC,"Image does not have the correct src");
+                result.put(ERRORDESC, "Image does not have the correct src");
                 saveStatuCallback.invoke(result);
             }
             return;
         }
 
-        WXViewToImageUtil.generateImage(getHostView(), 0, 0xfff8f8f8, new WXViewToImageUtil.OnImageSavedCallback() {
+        WXViewToImageUtil.generateImage(getHostView(), 0, 0xfff8f8f8, new WXViewToImageUtil
+                .OnImageSavedCallback() {
             @Override
             public void onSaveSucceed(String path) {
                 if (saveStatuCallback != null) {
@@ -431,7 +472,7 @@ public class HookImage extends WXComponent<ImageView> {
                 if (saveStatuCallback != null) {
                     Map<String, Object> result = new HashMap<>();
                     result.put(SUCCEED, false);
-                    result.put(ERRORDESC,errorDesc);
+                    result.put(ERRORDESC, errorDesc);
                     saveStatuCallback.invoke(result);
                 }
             }
@@ -440,16 +481,23 @@ public class HookImage extends WXComponent<ImageView> {
 
 
     public void destroy() {
-        if(getHostView() instanceof HookWXImageView){
+        //wxInstance destroy
+        if (getHostView() instanceof HookWXImageView) {
             if (getInstance().getImgLoaderAdapter() != null) {
-                getInstance().getImgLoaderAdapter().setImage(null, getHostView(), null, null);
+                getInstance().getImgLoaderAdapter().setImage(AUTORECYCLE_URL, getHostView(),
+                        null, null);
             }
+            ((HookWXImageView) getHostView()).destory();
         }
+//        Glide.with(getHostView().getContext()).clear(getHostView());
         super.destroy();
     }
 
     public interface Measurable {
         int getNaturalWidth();
+
         int getNaturalHeight();
     }
+
+
 }

@@ -157,7 +157,7 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.benmu.framework.extend.adapter;
+package com.benmu.framework.extend.adapter.image;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -175,11 +175,14 @@ import com.benmu.framework.BMWXApplication;
 import com.benmu.framework.R;
 import com.benmu.framework.extend.hook.ui.components.HookImage;
 import com.benmu.framework.extend.hook.ui.view.HookWXImageView;
+import com.benmu.framework.module.glide.GlideApp;
 import com.benmu.framework.module.glide.ImageRequestListener;
 import com.benmu.framework.utils.BMHookGlide;
 import com.benmu.framework.utils.ImageUtil;
 import com.benmu.framework.utils.L;
 import com.benmu.framework.utils.WXCommonUtil;
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.GlideBuilder;
 import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.engine.GlideException;
@@ -205,76 +208,93 @@ public class DefaultWXImageAdapter implements IWXImgLoaderAdapter {
     public DefaultWXImageAdapter() {
     }
 
-
-    private boolean validatePlaceHolder(WXImageStrategy strategy) {
-        return true;
-    }
-
     @Override
     public void setImage(final String url, final ImageView view,
                          WXImageQuality quality, final WXImageStrategy strategy) {
         if (view == null || !(view instanceof HookWXImageView)) return;
+        final String loadUri = url;
+        if (HookImage.AUTORECYCLE_URL.equals(loadUri)) {
+            //wximage被回收
+            view.setImageBitmap(null);
+            return;
+        }
+
         final HookWXImageView wxImageView = (HookWXImageView) view;
-        Log.e("DefaultWXImageAdapter", wxImageView.hashCode() + ">>>>>>>" + url);
-        wxImageView.setImageBitmap(null);
-        if (TextUtils.isEmpty(url)) {
-            handleError((HookWXImageView) view);
+        if (TextUtils.isEmpty(loadUri)) {
+            //设置的src为null
+            wxImageView.setImageBitmap(null);
+            handleError(wxImageView);
             if (strategy != null && strategy.getImageListener() != null) {
-                strategy.getImageListener().onImageFinish(url, view, true, null);
+                strategy.getImageListener().onImageFinish(loadUri, view, true, null);
             }
             return;
         }
-        wxImageView.setCurrentUrl(url);
 
-        BMHookGlide.load(BMWXApplication.getWXApplication(), url).apply(new RequestOptions()
-                .diskCacheStrategy(DiskCacheStrategy.ALL).transforms(new CenterCrop(), new
-                        BMRadiusTransfer(BMWXApplication.getWXApplication(), wxImageView))).listener
-                (new ImageRequestListener() {
+        wxImageView.hideErrorBitmap();
 
-
-                    @Override
-                    public void onProgress(String imageUrl, long bytesRead, long totalBytes, boolean
-                            isDone, Exception exception) {
-                        if (!wxImageView.ismShowing()) {
-                            int[] wh = WXCommonUtil.getComponentWH(wxImageView.getComponent());
-                            if (PLACEHOLDER_DEFAULT.equals(strategy.placeHolder)) {
-                                wxImageView.showLoading(wh[0], wh[1]);
-                            }
-                            wxImageView.hideErrorBitmap();
-                        }
-                    }
-
-                    @Override
-                    public boolean onLoadFailed(@Nullable GlideException e, Object model, Target
-                            target, boolean isFirstResource) {
-                        if (!denyPreviousRequest(url, wxImageView)) {
-                            wxImageView.hideLoading();
-                            handleError((HookWXImageView) wxImageView);
-                            if (strategy != null && strategy.getImageListener() != null) {
-                                strategy.getImageListener().onImageFinish(url, wxImageView, true,
-                                        null);
-                            }
-                        }
-
-                        return false;
-                    }
-
-                    @Override
-                    public boolean onResourceReady(Object resource, Object model, Target target,
-                                                   DataSource dataSource, boolean isFirstResource) {
-                        if (!denyPreviousRequest(url, wxImageView)) {
-                            wxImageView.hideLoading();
-                            wxImageView.hideErrorBitmap();
-                            if (strategy != null && strategy.getImageListener() != null) {
-                                strategy.getImageListener().onImageFinish(url, wxImageView, true,
-                                        null);
-                            }
-                        }
-                        return false;
-                    }
-                }).into(wxImageView);
+        //set placeHolder
+        if (isDefaultPlaceHolder(strategy)) {
+            int[] wh = WXCommonUtil.getComponentWH(wxImageView.getComponent());
+            wxImageView.showLoading(wh[0], wh[1]);
+        } else if (isCustomPlaceHolder(strategy)) {
+            //customer placeHolder
+            BMHookGlide.load(BMWXApplication.getWXApplication(), strategy.placeHolder).apply(new
+                    RequestOptions().fitCenter().diskCacheStrategy(DiskCacheStrategy.AUTOMATIC))
+                    .into
+                            (wxImageView);
+        } else {
+            //no placeHolder
+            wxImageView.hideLoading(); //防止复用出现的问题
+        }
 
 
+        DefaultImageViewTarget viewTarget = new DefaultImageViewTarget(wxImageView);
+        viewTarget.setImageLoadListener(new DefaultImageViewTarget.ImageLoadListener() {
+            @Override
+            public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super
+                    Drawable> transition) {
+                if (strategy != null && strategy.getImageListener() != null) {
+                    strategy.getImageListener().onImageFinish(loadUri,
+                            wxImageView,
+                            true,
+                            null);
+                }
+
+                if (isDefaultPlaceHolder(strategy)) {
+                    wxImageView.hideLoading();
+                }
+            }
+
+            @Override
+            public void onLoadFailed(@Nullable Drawable errorDrawable) {
+                handleError((HookWXImageView) wxImageView);
+                if (strategy != null && strategy.getImageListener() != null) {
+                    strategy.getImageListener().onImageFinish(loadUri,
+                            wxImageView,
+                            true,
+                            null);
+                }
+
+                if (isDefaultPlaceHolder(strategy)) {
+                    wxImageView.hideLoading();
+                }
+            }
+        });
+
+        BMHookGlide.load(BMWXApplication.getWXApplication(), loadUri).apply(new RequestOptions()
+                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC).transforms(new CenterCrop())).into(viewTarget);
+
+    }
+
+
+    private boolean isDefaultPlaceHolder(WXImageStrategy strategy) {
+        return !TextUtils.isEmpty(strategy.placeHolder) && PLACEHOLDER_DEFAULT.equals(strategy
+                .placeHolder);
+    }
+
+    private boolean isCustomPlaceHolder(WXImageStrategy strategy) {
+        return !TextUtils.isEmpty(strategy.placeHolder) && !PLACEHOLDER_DEFAULT.equals(strategy
+                .placeHolder);
     }
 
 
@@ -303,47 +323,8 @@ public class DefaultWXImageAdapter implements IWXImgLoaderAdapter {
     }
 
 
-
-
-
     private boolean denyPreviousRequest(String url, View imageView) {
         return !url.equals(((HookWXImageView) imageView).getCurrentUrl());
     }
-
-
-    private static class BMRadiusTransfer extends BitmapTransformation {
-
-        private HookWXImageView mView;
-
-        public BMRadiusTransfer(Context context) {
-            this(context, null);
-        }
-
-        BMRadiusTransfer(Context context, HookWXImageView imageView) {
-            super();
-            this.mView = imageView;
-        }
-
-        @Override
-        protected Bitmap transform(BitmapPool pool, Bitmap toTransform, int outWidth, int
-                outHeight) {
-            return roundCrop(pool, toTransform);
-        }
-
-        private Bitmap roundCrop(BitmapPool pool, Bitmap source) {
-
-            if (source == null || mView == null) return source;
-
-            Drawable roundDrawable = mView.getRoundDrawable(source);
-            return roundDrawable == null ? source : ImageUtil.drawableToBitmap(roundDrawable);
-        }
-
-
-        @Override
-        public void updateDiskCacheKey(@NonNull MessageDigest messageDigest) {
-
-        }
-    }
-
 
 }

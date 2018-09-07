@@ -28,4 +28,10 @@ public class HookBounceRecyclerView extends BounceRecyclerView {
         swipeLayout.getHeaderView().setRefreshView(view);
     }
     //benmu.org
+
+    public void setCustomFootView(View view){    // iCoastline 下拉加载更多
+        setLoadmoreEnable(true);
+        swipeLayout.setLoadingHeight(WXViewUtils.dip2px(40));
+        swipeLayout.getFooterView().setRefreshView(view);
+    }
 }

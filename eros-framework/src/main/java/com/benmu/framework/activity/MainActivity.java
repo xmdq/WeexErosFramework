@@ -6,18 +6,22 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
 import android.support.v4.content.LocalBroadcastManager;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.ViewGroup;
 import android.view.ViewStub;
 import android.widget.FrameLayout;
 
+import com.benmu.framework.BMWXApplication;
 import com.benmu.framework.BMWXEnvironment;
 import com.benmu.framework.R;
 import com.benmu.framework.constant.Constant;
+import com.benmu.framework.event.TabbarEvent;
 import com.benmu.framework.manager.impl.GlobalEventManager;
 import com.benmu.framework.model.RouterModel;
 import com.benmu.framework.model.TabbarBadgeModule;
 import com.benmu.framework.model.WeexEventBean;
+import com.benmu.framework.utils.SharePreferenceUtil;
 import com.benmu.framework.view.TableView;
 import com.taobao.weex.WXSDKEngine;
 import com.taobao.weex.WXSDKInstance;
@@ -33,6 +37,7 @@ public class MainActivity extends AbstractWeexActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+//        AndroidBug5497Workaround.assistActivity(this);
         routerModel = (RouterModel) getIntent().getSerializableExtra(Constant.ROUTERPARAMS);
         if (Constant.TABBAR.equals(routerModel.url)) {
             initTabView();
@@ -42,6 +47,8 @@ public class MainActivity extends AbstractWeexActivity {
             renderPage();
         }
         initReloadReceiver();
+
+        statusBarHidden(BMWXApplication.getWXApplication().IS_FULL_SCREEN);
     }
 
 
@@ -54,7 +61,7 @@ public class MainActivity extends AbstractWeexActivity {
                 }
             }
         };
-        LocalBroadcastManager.getInstance(this).registerReceiver(mReloadReceiver, new
+        LocalBroadcastManager.getInstance(BMWXEnvironment.mApplicationContext).registerReceiver(mReloadReceiver, new
                 IntentFilter(WXSDKEngine.JS_FRAMEWORK_RELOAD));
     }
 
@@ -83,7 +90,7 @@ public class MainActivity extends AbstractWeexActivity {
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if ((keyCode == KeyEvent.KEYCODE_BACK)) {
             if (isHomePage() && BMWXEnvironment.mPlatformConfig.isAndroidIsListenHomeBack()) {
-                WXSDKInstance wxsdkInstance = getWXSDK();
+                WXSDKInstance wxsdkInstance = getWXSDkInstance();
                 if (wxsdkInstance != null) {
                     GlobalEventManager.homeBack(wxsdkInstance);
                     return true;
@@ -93,8 +100,9 @@ public class MainActivity extends AbstractWeexActivity {
         return super.onKeyDown(keyCode, event);
     }
 
-    private WXSDKInstance getWXSDK() {
-        return (tableView != null) ? tableView.getWXSDKInstance() : getWXSDkInstance();
+    @Override
+    public WXSDKInstance getWXSDkInstance() {
+        return (tableView != null) ? tableView.getWXSDKInstance() : super.getWXSDkInstance();
 
     }
 
@@ -123,5 +131,18 @@ public class MainActivity extends AbstractWeexActivity {
         if (tableView != null) {
             tableView.openPage(index);
         }
+    }
+
+    public int getPageIndex() {
+        if (tableView != null) {
+            return tableView.getCurrentIndex();
+        }
+        return -1;
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        LocalBroadcastManager.getInstance(BMWXEnvironment.mApplicationContext).unregisterReceiver(mReloadReceiver);
     }
 }

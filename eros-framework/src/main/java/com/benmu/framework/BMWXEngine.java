@@ -1,11 +1,14 @@
 package com.benmu.framework;
 
+import android.annotation.TargetApi;
 import android.app.Application;
 import android.content.Context;
 import android.content.res.Resources;
+import android.os.Build;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.ViewConfiguration;
 
 import com.alibaba.android.bindingx.plugin.weex.BindingX;
 import com.alibaba.weex.plugin.loader.WeexPluginContainer;
@@ -15,8 +18,9 @@ import com.benmu.framework.event.DispatchEventCenter;
 import com.benmu.framework.event.mediator.EventCenter;
 import com.benmu.framework.extend.adapter.DefaultTypefaceAdapter;
 import com.benmu.framework.extend.adapter.DefaultWXHttpAdapter;
-import com.benmu.framework.extend.adapter.DefaultWXImageAdapter;
+import com.benmu.framework.extend.adapter.image.DefaultWXImageAdapter;
 import com.benmu.framework.extend.adapter.LightlyWebSocketFactory;
+import com.benmu.framework.extend.hook.ui.components.HookWeb;
 import com.benmu.framework.extend.hook.ui.components.HookWxScroller;
 import com.benmu.framework.extend.mediator.MediatorDocker;
 import com.benmu.framework.extend.hook.ui.components.HookImage;
@@ -39,8 +43,10 @@ import com.taobao.weex.dom.RichTextDomObject;
 import com.taobao.weex.dom.WXTextDomObject;
 import com.taobao.weex.ui.SimpleComponentHolder;
 import com.taobao.weex.ui.component.WXBasicComponentType;
+import com.taobao.weex.ui.component.WXWeb;
 
 
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -101,6 +107,8 @@ public class BMWXEngine {
                     WXBasicComponentType.SCROLLER
             );
 
+
+            WXSDKEngine.registerComponent(WXBasicComponentType.WEB, HookWeb.class);
         } catch (WXException e) {
             e.printStackTrace();
         }
@@ -200,6 +208,8 @@ public class BMWXEngine {
 
         insideEnv.put(Constant.CustomOptions.CUSTOM_NAVBARHEIGHT, BaseCommonUtil
                 .transferDimenToFE(context, BaseCommonUtil.dp2px(context, 44)) + "");
+        insideEnv.put(Constant.CustomOptions.CUSTOM_TABBARHEIGHT, BaseCommonUtil
+                .transferDimenToFE(context, BaseCommonUtil.dp2px(context, 55)) + "");
         insideEnv.put(Constant.CustomOptions.CUSTOM_JSVERSION, AppUtils.getJsVersion(context));
         insideEnv.put(Constant.CustomOptions.CUSTOM_DEVICEID, AppUtils.getDeviceId(context));
         String fontSize = SharePreferenceUtil.getAppFontSizeOption(context);
@@ -209,9 +219,10 @@ public class BMWXEngine {
 
         Resources resources = context.getResources();
         DisplayMetrics dm = resources.getDisplayMetrics();
-
+        int virtualHeight = BaseCommonUtil.getNavigationBarHeight(context);
         insideEnv.put(Constant.CustomOptions.CUSTOM_DEVICEHEIGHT, String.valueOf(dm.heightPixels));
         insideEnv.put(Constant.CustomOptions.CUSTOM_DEVICEWIDTH, String.valueOf(dm.widthPixels));
+        insideEnv.put(Constant.CustomOptions.CUSTOM_VIRTUAL_BUTTONS_HEIGHT, String.valueOf(virtualHeight));
 
         if (Env != null && !Env.isEmpty()) {
             for (Map.Entry<String, String> entry : Env.entrySet()) {
